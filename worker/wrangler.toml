@@ -6,11 +6,11 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding     = "DB"
 database_name = "our-dictionary-db"
-database_id   = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+"database_id": "1540b42e-e2df-4eca-9714-aa05cb8f18e3"
 
 [[r2_buckets]]
-binding     = "VOICES"
-bucket_name = "our-dictionary-voices"
+      "bucket_name": "our-dictionary-voices",
+      "binding": "our_dictionary_voices"
 
 [vars]
 # Frontend origin for CORS — update after deploying to Pages
