@@ -1,0 +1,19 @@
+# deps
+node_modules/
+worker/node_modules/
+
+# Next.js
+.next/
+out/
+
+# env
+.env.local
+.env.*.local
+
+# Wrangler
+.wrangler/
+worker/.wrangler/
+
+# OS
+.DS_Store
+Thumbs.db

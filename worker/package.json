@@ -1,0 +1,16 @@
+{
+  "name": "our-dictionary-worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:init:local": "wrangler d1 execute our-dictionary-db --local --file=../schema.sql",
+    "db:init:remote": "wrangler d1 execute our-dictionary-db --remote --file=../schema.sql"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4",
+    "typescript": "^5",
+    "wrangler": "^3"
+  }
+}

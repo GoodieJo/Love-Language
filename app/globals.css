@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;500&family=IBM+Plex+Mono:wght@400;500&display=swap");
+
+:root {
+  --base:       #FBF8F5;
+  --paper:      #F2EDE8;
+  --rule:       #E8E0D8;
+  --rule-soft:  #EDE6DF;
+  --mauve:      #B8A99A;
+  --mauve-dim:  #CFC3B9;
+  --ink:        #3D3530;
+  --ink-mid:    #7A6E68;
+  --ink-light:  #A8998F;
+  --sage:       #7A9B8A;
+  --wheat:      #C4A882;
+  --rose-tint:  #F7F0EC;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  background: var(--base);
+  color: var(--ink);
+  font-family: "Inter", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Hide scrollbars everywhere — we handle overflow-y ourselves */
+::-webkit-scrollbar { width: 0; height: 0; }
+
+/* Playfair helper */
+.font-display {
+  font-family: "Playfair Display", serif;
+}
+
+.font-mono-dict {
+  font-family: "IBM Plex Mono", monospace;
+}
