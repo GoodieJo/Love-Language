@@ -14,7 +14,7 @@ export function OnboardingScreen() {
         className="text-[10.5px] font-medium tracking-[0.22em] uppercase mb-3"
         style={{ color: "var(--mauve)" }}
       >
-        Our Dictionary
+        Love Language
       </p>
 
       <h1
@@ -23,14 +23,14 @@ export function OnboardingScreen() {
       >
         A book that<br />
         belongs to<br />
-        <em className="italic" style={{ color: "var(--mauve)" }}>both of you.</em>
+        <em className="italic" style={{ color: "var(--mauve)" }}>both of Us.🩷</em>
       </h1>
 
       <p
         className="text-[14px] leading-[1.65] mb-11 max-w-[230px]"
         style={{ color: "var(--ink-light)" }}
       >
-        Build a private multilingual notebook together, one word at a time.
+        Built with right amount of Love 🥰
       </p>
 
       <div
@@ -40,7 +40,7 @@ export function OnboardingScreen() {
 
       <div className="w-full flex flex-col gap-[10px]">
         <Button fullWidth onClick={() => goTo("create")}>
-          Create our book
+          Create our Love Language 😘
         </Button>
         <Button fullWidth variant="secondary" onClick={() => goTo("join")}>
           Join with a code
