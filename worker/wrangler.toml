@@ -14,4 +14,4 @@ bucket_name = "our-dictionary-voices"
 
 [vars]
 # Frontend origin for CORS — update after deploying to Pages
-ALLOWED_ORIGIN = "https://love-language.pages.dev/"
+ALLOWED_ORIGIN = "https://love-language.pages.dev"
