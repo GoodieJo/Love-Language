@@ -14,4 +14,4 @@ bucket_name = "our-dictionary-voices"
 
 [vars]
 # Frontend origin for CORS — update after deploying to Pages
-ALLOWED_ORIGIN = "http://localhost:3000"
+ALLOWED_ORIGIN = "https://our-dictionary.pages.dev"
