@@ -2,13 +2,13 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Our Dictionary",
+  title: "Our Love Language",
   description: "A private shared multilingual notebook for two people.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Our Dictionary",
+    title: "Our Love Language",
   },
 };
 
