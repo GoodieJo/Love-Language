@@ -33,20 +33,26 @@ export function VoiceButton({ src, onSave, onDelete }: VoiceButtonProps) {
   const isLoading    = player.playerState === "loading";
 
   // ── Hold handlers ─────────────────────────────────────────────────────────
+  // We use pointer capture so the button keeps receiving up/cancel events
+  // even if its own re-render shifts layout under the user's finger
+  // (this was causing instant stop() right after start() — the "0.2s" bug).
 
-  function handlePointerDown(e: React.PointerEvent) {
+  function handlePointerDown(e: React.PointerEvent<HTMLButtonElement>) {
     e.preventDefault();
     if (isUploading || isRecording) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
     recorder.start();
   }
 
-  function handlePointerUp(e: React.PointerEvent) {
+  function handlePointerUp(e: React.PointerEvent<HTMLButtonElement>) {
     e.preventDefault();
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
     if (isRecording) recorder.stop();
   }
 
-  // Also stop if pointer leaves while held
-  function handlePointerLeave(e: React.PointerEvent) {
+  function handlePointerCancel(e: React.PointerEvent<HTMLButtonElement>) {
     e.preventDefault();
     if (isRecording) recorder.stop();
   }
@@ -146,7 +152,7 @@ export function VoiceButton({ src, onSave, onDelete }: VoiceButtonProps) {
         <button
           onPointerDown={handlePointerDown}
           onPointerUp={handlePointerUp}
-          onPointerLeave={handlePointerLeave}
+          onPointerCancel={handlePointerCancel}
           disabled={isUploading}
           className="flex items-center gap-[6px] rounded-[10px] border px-3 py-[6px] text-[12px] cursor-pointer select-none transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
           style={{
@@ -157,6 +163,7 @@ export function VoiceButton({ src, onSave, onDelete }: VoiceButtonProps) {
             transform:    isRecording ? "scale(1.03)"          : "scale(1)",
             userSelect: "none",
             WebkitUserSelect: "none",
+            touchAction: "none",
           }}
         >
           {isUploading ? (
