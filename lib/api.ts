@@ -42,6 +42,13 @@ export async function getBook(shareCodeOrId: string): Promise<Book> {
   return req<Book>(`/api/books/${encodeURIComponent(shareCodeOrId)}`);
 }
 
+export async function updateBook(bookId: string, name: string): Promise<Book> {
+  return req<Book>(`/api/books/${bookId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name }),
+  });
+}
+
 // ─── Entries ──────────────────────────────────────────────────────────────────
 
 export async function listEntries(bookId: string): Promise<Entry[]> {

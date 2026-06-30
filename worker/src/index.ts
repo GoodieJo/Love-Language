@@ -1,17 +1,5 @@
 /**
  * Our Dictionary — Cloudflare Worker API
- *
- * Routes:
- *   POST   /api/books                          Create a new book
- *   GET    /api/books/:shareCode               Join by share code
- *   GET    /api/books/:bookId/entries          List all entries
- *   POST   /api/books/:bookId/entries          Create an entry
- *   GET    /api/entries/:entryId               Get one entry
- *   PATCH  /api/entries/:entryId               Update an entry
- *   DELETE /api/entries/:entryId               Delete an entry
- *   POST   /api/entries/:entryId/voice/:lang   Upload voice recording → R2
- *   GET    /api/entries/:entryId/voice/:lang   Stream voice recording from R2
- *   DELETE /api/entries/:entryId/voice/:lang   Delete voice recording from R2
  */
 
 export interface Env {
@@ -20,7 +8,6 @@ export interface Env {
   ALLOWED_ORIGIN: string;
 }
 
-// ─── Tiny ID generator (no crypto.randomUUID on older runtimes) ───────────────
 function uid(): string {
   return crypto.randomUUID();
 }
@@ -34,8 +21,7 @@ function shareCode(): string {
   return `${code.slice(0, 3)}-${code.slice(3)}`;
 }
 
-// ─── CORS helpers ─────────────────────────────────────────────────────────────
-function corsHeaders(env: Env): HeadersInit {
+function cors(env: Env): HeadersInit {
   return {
     "Access-Control-Allow-Origin": env.ALLOWED_ORIGIN,
     "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
@@ -46,18 +32,17 @@ function corsHeaders(env: Env): HeadersInit {
 function ok<T>(data: T, env: Env, status = 200): Response {
   return new Response(JSON.stringify({ ok: true, data }), {
     status,
-    headers: { "Content-Type": "application/json", ...corsHeaders(env) },
+    headers: { "Content-Type": "application/json", ...cors(env) },
   });
 }
 
 function err(message: string, env: Env, status = 400): Response {
   return new Response(JSON.stringify({ ok: false, error: message }), {
     status,
-    headers: { "Content-Type": "application/json", ...corsHeaders(env) },
+    headers: { "Content-Type": "application/json", ...cors(env) },
   });
 }
 
-// ─── Row → camelCase mappers ──────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapBook(row: any) {
   return {
@@ -90,151 +75,152 @@ function mapEntry(row: any) {
   };
 }
 
-// ─── Router ───────────────────────────────────────────────────────────────────
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
     const method = request.method;
 
-    // Preflight
+    // ── Preflight ────────────────────────────────────────────────────────────
     if (method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: corsHeaders(env) });
+      return new Response(null, { status: 204, headers: cors(env) });
     }
 
     try {
-      // ── POST /api/books ──────────────────────────────────────────────────
-      if (method === "POST" && path === "/api/books") {
+
+      // ── POST /api/books — create book ────────────────────────────────────
+      if (path === "/api/books" && method === "POST") {
         const body = await request.json<{ name?: string }>();
-        const id = uid();
+        const id   = uid();
         const code = shareCode();
         const name = body.name?.trim() || "Our Dictionary";
 
         await env.DB.prepare(
           `INSERT INTO books (id, name, share_code) VALUES (?, ?, ?)`
-        )
-          .bind(id, name, code)
-          .run();
+        ).bind(id, name, code).run();
 
         const row = await env.DB.prepare(
           `SELECT * FROM books WHERE id = ?`
-        )
-          .bind(id)
-          .first();
+        ).bind(id).first();
 
         return ok(mapBook(row), env, 201);
       }
 
-      // ── GET /api/books/:shareCode ────────────────────────────────────────
-      const joinMatch = path.match(/^\/api\/books\/([^/]+)$/);
-      if (method === "GET" && joinMatch) {
-        const shareCodeOrId = joinMatch[1];
+      // ── GET /api/books/:code — get book by share code or id ──────────────
+      const bookMatch = path.match(/^\/api\/books\/([^/]+)$/);
+      if (bookMatch && method === "GET") {
+        const param = decodeURIComponent(bookMatch[1]);
 
-        // Try share code first, then id (for internal use)
         let row = await env.DB.prepare(
           `SELECT * FROM books WHERE share_code = ?`
-        )
-          .bind(shareCodeOrId)
-          .first();
+        ).bind(param).first();
 
         if (!row) {
           row = await env.DB.prepare(
             `SELECT * FROM books WHERE id = ?`
-          )
-            .bind(shareCodeOrId)
-            .first();
+          ).bind(param).first();
         }
 
         if (!row) return err("Book not found", env, 404);
         return ok(mapBook(row), env);
       }
 
-      // ── GET /api/books/:bookId/entries ───────────────────────────────────
-      const listMatch = path.match(/^\/api\/books\/([^/]+)\/entries$/);
-      if (method === "GET" && listMatch) {
-        const bookId = listMatch[1];
+      // ── PATCH /api/books/:bookId — update book name ───────────────────────
+      if (bookMatch && method === "PATCH") {
+        const bookId = bookMatch[1];
+        const body   = await request.json<{ name?: string }>();
+        const name   = body.name?.trim();
+        if (!name) return err("Name required", env);
 
-        const { results } = await env.DB.prepare(
-          `SELECT * FROM entries WHERE book_id = ? ORDER BY created_at DESC`
-        )
-          .bind(bookId)
-          .all();
-
-        return ok(results.map(mapEntry), env);
-      }
-
-      // ── POST /api/books/:bookId/entries ──────────────────────────────────
-      if (method === "POST" && listMatch) {
-        const bookId = listMatch[1];
-        const body = await request.json<Record<string, string | null>>();
-        const id = uid();
-        const now = new Date().toISOString();
-
-        await env.DB.prepare(`
-          INSERT INTO entries (
-            id, book_id,
-            english, english_example, english_voice,
-            hindi, hindi_pronunciation, hindi_example, hindi_voice,
-            filipino, filipino_example, filipino_voice,
-            notes, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `)
-          .bind(
-            id, bookId,
-            body.english ?? null,
-            body.englishExample ?? null,
-            null,
-            body.hindi ?? null,
-            body.hindiPronunciation ?? null,
-            body.hindiExample ?? null,
-            null,
-            body.filipino ?? null,
-            body.filipinoExample ?? null,
-            null,
-            body.notes ?? null,
-            now, now
-          )
-          .run();
+        await env.DB.prepare(
+          `UPDATE books SET name = ?, updated_at = ? WHERE id = ?`
+        ).bind(name, new Date().toISOString(), bookId).run();
 
         const row = await env.DB.prepare(
-          `SELECT * FROM entries WHERE id = ?`
-        )
-          .bind(id)
-          .first();
+          `SELECT * FROM books WHERE id = ?`
+        ).bind(bookId).first();
 
-        return ok(mapEntry(row), env, 201);
+        if (!row) return err("Book not found", env, 404);
+        return ok(mapBook(row), env);
       }
 
-      // ── Single entry routes (/api/entries/:entryId) ──────────────────────
-      const entryMatch = path.match(/^\/api\/entries\/([^/]+)$/);
+      // ── /api/books/:bookId/entries — list or create ───────────────────────
+      const entriesMatch = path.match(/^\/api\/books\/([^/]+)\/entries$/);
+      if (entriesMatch) {
+        const bookId = entriesMatch[1];
 
+        // GET — list all entries
+        if (method === "GET") {
+          const { results } = await env.DB.prepare(
+            `SELECT * FROM entries WHERE book_id = ? ORDER BY created_at DESC`
+          ).bind(bookId).all();
+
+          return ok(results.map(mapEntry), env);
+        }
+
+        // POST — create entry
+        if (method === "POST") {
+          const body = await request.json<Record<string, string | null>>();
+          const id  = uid();
+          const now = new Date().toISOString();
+
+          await env.DB.prepare(`
+            INSERT INTO entries (
+              id, book_id,
+              english, english_example, english_voice,
+              hindi, hindi_pronunciation, hindi_example, hindi_voice,
+              filipino, filipino_example, filipino_voice,
+              notes, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).bind(
+            id, bookId,
+            body.english          ?? null,
+            body.englishExample   ?? null,
+            null,
+            body.hindi            ?? null,
+            body.hindiPronunciation ?? null,
+            body.hindiExample     ?? null,
+            null,
+            body.filipino         ?? null,
+            body.filipinoExample  ?? null,
+            null,
+            body.notes            ?? null,
+            now, now
+          ).run();
+
+          const row = await env.DB.prepare(
+            `SELECT * FROM entries WHERE id = ?`
+          ).bind(id).first();
+
+          return ok(mapEntry(row), env, 201);
+        }
+      }
+
+      // ── /api/entries/:entryId — get, update, delete ───────────────────────
+      const entryMatch = path.match(/^\/api\/entries\/([^/]+)$/);
       if (entryMatch) {
         const entryId = entryMatch[1];
 
-        // GET
         if (method === "GET") {
           const row = await env.DB.prepare(
             `SELECT * FROM entries WHERE id = ?`
-          )
-            .bind(entryId)
-            .first();
+          ).bind(entryId).first();
 
           if (!row) return err("Entry not found", env, 404);
           return ok(mapEntry(row), env);
         }
 
-        // PATCH
         if (method === "PATCH") {
           const body = await request.json<Record<string, string | null>>();
           const fieldMap: Record<string, string> = {
-            english:            "english",
-            englishExample:     "english_example",
-            hindi:              "hindi",
-            hindiPronunciation: "hindi_pronunciation",
-            hindiExample:       "hindi_example",
-            filipino:           "filipino",
-            filipinoExample:    "filipino_example",
-            notes:              "notes",
+            english:             "english",
+            englishExample:      "english_example",
+            hindi:               "hindi",
+            hindiPronunciation:  "hindi_pronunciation",
+            hindiExample:        "hindi_example",
+            filipino:            "filipino",
+            filipinoExample:     "filipino_example",
+            notes:               "notes",
           };
 
           const sets: string[] = ["updated_at = ?"];
@@ -246,53 +232,40 @@ export default {
               values.push(body[jsKey]);
             }
           }
-
           values.push(entryId);
 
           await env.DB.prepare(
             `UPDATE entries SET ${sets.join(", ")} WHERE id = ?`
-          )
-            .bind(...values)
-            .run();
+          ).bind(...values).run();
 
           const row = await env.DB.prepare(
             `SELECT * FROM entries WHERE id = ?`
-          )
-            .bind(entryId)
-            .first();
+          ).bind(entryId).first();
 
           return ok(mapEntry(row), env);
         }
 
-        // DELETE
         if (method === "DELETE") {
-          // Clean up any voice recordings first
           for (const lang of ["english", "hindi", "filipino"]) {
-            const key = `${entryId}/${lang}`;
-            await env.VOICES.delete(key);
+            await env.VOICES.delete(`${entryId}/${lang}`);
           }
-
           await env.DB.prepare(
             `DELETE FROM entries WHERE id = ?`
-          )
-            .bind(entryId)
-            .run();
+          ).bind(entryId).run();
 
           return ok({ deleted: true }, env);
         }
       }
 
-      // ── Voice routes (/api/entries/:entryId/voice/:lang) ─────────────────
+      // ── /api/entries/:entryId/voice/:lang — upload, stream, delete ────────
       const voiceMatch = path.match(
         /^\/api\/entries\/([^/]+)\/voice\/(english|hindi|filipino)$/
       );
-
       if (voiceMatch) {
         const [, entryId, lang] = voiceMatch;
         const r2Key = `${entryId}/${lang}`;
         const dbCol = `${lang}_voice`;
 
-        // POST — upload
         if (method === "POST") {
           if (!request.body) return err("No body", env);
           const contentType = request.headers.get("Content-Type") ?? "audio/webm";
@@ -301,17 +274,13 @@ export default {
             httpMetadata: { contentType },
           });
 
-          // Store the R2 key in the DB column
           await env.DB.prepare(
             `UPDATE entries SET ${dbCol} = ?, updated_at = ? WHERE id = ?`
-          )
-            .bind(r2Key, new Date().toISOString(), entryId)
-            .run();
+          ).bind(r2Key, new Date().toISOString(), entryId).run();
 
           return ok({ key: r2Key }, env, 201);
         }
 
-        // GET — stream
         if (method === "GET") {
           const obj = await env.VOICES.get(r2Key);
           if (!obj) return err("Recording not found", env, 404);
@@ -320,26 +289,23 @@ export default {
             headers: {
               "Content-Type": obj.httpMetadata?.contentType ?? "audio/webm",
               "Cache-Control": "private, max-age=3600",
-              ...corsHeaders(env),
+              ...cors(env),
             },
           });
         }
 
-        // DELETE
         if (method === "DELETE") {
           await env.VOICES.delete(r2Key);
-
           await env.DB.prepare(
             `UPDATE entries SET ${dbCol} = NULL, updated_at = ? WHERE id = ?`
-          )
-            .bind(new Date().toISOString(), entryId)
-            .run();
+          ).bind(new Date().toISOString(), entryId).run();
 
           return ok({ deleted: true }, env);
         }
       }
 
       return err("Not found", env, 404);
+
     } catch (e) {
       console.error(e);
       return err("Internal server error", env, 500);
