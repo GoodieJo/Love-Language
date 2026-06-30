@@ -30,18 +30,18 @@ const empty: FormState = {
   notes:              "",
 };
 
-type PendingVoices = {
-  english:  Blob | null;
-  hindi:    Blob | null;
-  filipino: Blob | null;
-};
+type Language = "english" | "hindi" | "filipino";
+
+type PendingVoices = Record<Language, Blob | null>;
+
+type PreviewUrls = Record<Language, string | null>;
 
 export function AddScreen() {
   const { state, dispatch }         = useApp();
   const { goBack }                  = useNav();
   const [form, setForm]             = useState<FormState>(empty);
   const [pending, setPending]       = useState<PendingVoices>({ english: null, hindi: null, filipino: null });
-  const [previewUrls, setPreviewUrls] = useState<PendingVoices & Record<string, string | null>>({ english: null, hindi: null, filipino: null });
+  const [previewUrls, setPreviewUrls] = useState<PreviewUrls>({ english: null, hindi: null, filipino: null });
   const [saving, setSaving]         = useState(false);
   const [error, setError]           = useState<string | null>(null);
 
@@ -51,7 +51,7 @@ export function AddScreen() {
   }
 
   // Store blob locally for preview; upload after entry is created
-  function makePendingSaver(lang: "english" | "hindi" | "filipino") {
+  function makePendingSaver(lang: Language) {
     return async (blob: Blob) => {
       // Revoke old preview URL to avoid memory leaks
       const old = previewUrls[lang];
@@ -63,7 +63,7 @@ export function AddScreen() {
     };
   }
 
-  function clearPending(lang: "english" | "hindi" | "filipino") {
+  function clearPending(lang: Language) {
     const old = previewUrls[lang];
     if (old) URL.revokeObjectURL(old);
     setPending((p) => ({ ...p, [lang]: null }));
@@ -89,7 +89,7 @@ export function AddScreen() {
       } as any);
 
       // 2 — upload any pending voice blobs to R2
-      const langs = ["english", "hindi", "filipino"] as const;
+      const langs: Language[] = ["english", "hindi", "filipino"];
       await Promise.all(
         langs
           .filter((l) => pending[l] !== null)
